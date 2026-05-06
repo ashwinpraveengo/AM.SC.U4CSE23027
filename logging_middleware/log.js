@@ -1,35 +1,63 @@
-const express = require('express');
-const logapp = express();
-    
-logapp.use(express.json());
+﻿const baseUrl='http://20.207.122.201/evaluation-service/logs';
 
-logapp.use((req, res, next) => {
-    console.log(`${req.method} ${req.url}`);
-    next();
-});
+const valid_stacks=new Set(['backend','frontend']);
+const valid_levels=new Set(['debug', 'info', 'warn', 'error', 'fatal']);
+const valid_packs=new Set([
+  'cache',
+  'controller',
+  'cron_job',
+  'service',
+  'api',
+  'component',
+  'hook',
+  'page',
+  'state',
+  'style',
+  'auth',
+  'config',
+  'middleware',
+  'utils'
+]);
 
-const baseUrl = 'http://20.207.122.201/evaluation-service/logs';
+function validateField(value, validSet) {
+  if (!validSet.has(value)){
+    console.error('Invalid');
+  }
+}
 
-logapp.post('/', async (req, res) => {
-    const reqbody={
-        stack: 'backend',
-        level: req.body.level,
-        package: req.body.package,
-        message: req.body.message
-    };
+async function Log(stack, level, packageName, message, options = {}) {
+  validateField(stack,valid_stacks);
+  validateField(level, valid_levels);
+  validateField(packageName,valid_packs);
 
-    try {
-        const response = await fetch(baseUrl,{
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(reqbody)
-        });
-        console.log('Success !');
-        res.status(200).send('Log sent !');
-    } catch (error) {
-        console.error('Request failed :', error);
-        res.status(500).send('Log req failed');
-    }
-});
+  const authToken=options.authToken || process.env.LOG_API_TOKEN;
+  const headers={
+    'Content-Type': 'application/json'
+  };
 
-module.exports=logapp;
+  if (authToken) {
+    headers.Authorization=`Bearer ${authToken}`;
+  }
+
+  const logbody={
+    stack,
+    level,
+    package: packageName,
+    message
+  };
+
+  const response=await fetch(baseUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(logbody)
+  });
+
+  if (!response.ok) {
+    const error=await response.text();
+    console.error('Failed to send log', error);
+  }
+
+  return response.json();
+}
+
+module.exports={Log};
